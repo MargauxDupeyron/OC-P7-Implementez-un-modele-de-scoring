@@ -1,0 +1,52 @@
+# Environnements virtuels
+.venv/
+venv/
+env/
+
+# Fichiers Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# Données (à adapter selon ce que tu veux versionner)
+data/raw/
+data/processed/
+
+# MLflow
+mlruns/
+mlartifacts/
+mlflow.db
+artifacts/
+
+# Logs, artefacts temporaires
+logs/
+tmp/
+temp/
+*.log
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# VSCode / IDE
+.vscode/
+.idea/
+
+# HTML générés volumineux (sauf si tu veux les versionner)
+# reports/drift_report.html  # si tu préfères le livrer à part sans le suivre en Git
+
+# Docker
+*.tar
+
+# Cours/Rapports
+courses/
+reports/
+*.pdf

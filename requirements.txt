@@ -1,0 +1,33 @@
+# === Core Python & Data Science ===
+numpy==1.26.4
+pandas==2.2.2
+scikit-learn==1.4.2
+scipy==1.11.4
+
+# === Gradient Boosting Models ===
+lightgbm==4.3.0
+xgboost==2.0.3
+
+# === Model Explainability ===
+shap==0.45.1
+matplotlib==3.8.4
+seaborn==0.13.2
+
+# === Experiment Tracking ===
+mlflow==2.14.1
+protobuf==4.25.3
+rich==13.7.1
+
+# === Data Drift & Monitoring ===
+evidently==0.4.38
+
+# === API (déploiement local ou cloud) ===
+fastapi==0.115.0
+uvicorn==0.30.6
+
+# === Tests unitaires ===
+pytest==8.3.2
+
+# === Divers / Utilitaires ===
+joblib==1.4.2
+python-dotenv==1.0.1
