@@ -1,0 +1,23 @@
+// Home Credit Data Structure
+digraph {
+	A [label="application_train / test
+(SK_ID_CURR, TARGET)"]
+	B [label="bureau
+(SK_ID_BUREAU, SK_ID_CURR)"]
+	C [label="bureau_balance
+(SK_ID_BUREAU)"]
+	D [label="previous_application
+(SK_ID_PREV, SK_ID_CURR)"]
+	E [label="POS_CASH_BALANCE
+(SK_ID_PREV)"]
+	F [label="credit_card_balance
+(SK_ID_PREV)"]
+	G [label="installments_payment
+(SK_ID_PREV)"]
+	A -> B [label=SK_ID_CURR]
+	B -> C [label=SK_ID_BUREAU]
+	A -> D [label=SK_ID_CURR]
+	D -> E [label=SK_ID_PREV]
+	D -> F [label=SK_ID_PREV]
+	D -> G [label=SK_ID_PREV]
+}
