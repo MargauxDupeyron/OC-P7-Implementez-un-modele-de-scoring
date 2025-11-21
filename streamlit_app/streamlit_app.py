@@ -10,8 +10,11 @@ from dotenv import load_dotenv
 # -------------------------------------------------------------------
 load_dotenv()
 
-# URL de l'API (même logique que dans le notebook de test)
-BASE_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
+# URL de base de l'API : cloud par défaut, local en fallback
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
+
+st.set_page_config(page_title="Home Credit Scoring", layout="wide")
+st.sidebar.markdown(f"**API utilisée :** `{API_URL}`")
 
 # Chemin vers le fichier de test
 TEST_PATH = os.getenv(
@@ -78,7 +81,7 @@ idx = st.sidebar.number_input(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.write(f"API URL : `{BASE_URL}`")
+st.sidebar.write(f"API URL : `{API_URL}`")
 
 st.subheader("1️⃣ Client sélectionné")
 
@@ -92,7 +95,7 @@ st.dataframe(sample.to_frame(name="valeur"))
 st.subheader("2️⃣ Statut de l’API")
 
 try:
-    health_resp = requests.get(f"{BASE_URL}/health", timeout=5)
+    health_resp = requests.get(f"{API_URL}/health", timeout=5)
     if health_resp.status_code == 200:
         data = health_resp.json()
         status = data.get("status", "unknown")
@@ -114,7 +117,7 @@ if st.button("Lancer la prédiction pour ce client"):
         payload = {"features": clean_features}
 
         try:
-            resp = requests.post(f"{BASE_URL}/predict", json=payload, timeout=10)
+            resp = requests.post(f"{API_URL}/predict", json=payload, timeout=10)
         except Exception as e:
             st.error(f"Erreur lors de l'appel à l'API : {e}")
         else:
