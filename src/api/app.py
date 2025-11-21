@@ -1,12 +1,10 @@
 import os
 import joblib
-import numpy as np
 import pandas as pd
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Optional
-
 from dotenv import load_dotenv
 
 # -------------------------------------------------------------------
@@ -14,34 +12,34 @@ from dotenv import load_dotenv
 # -------------------------------------------------------------------
 load_dotenv()
 
-# Chemin vers le modèle (par défaut : models/final_lightgbm_model.joblib)
 MODEL_PATH = os.getenv("MODEL_PATH", "models/final_lightgbm_model.joblib")
 
-# Objets globaux
+# Objets globaux (chargés au démarrage)
 _model = None          # pipeline sklearn (imputer + LGBM)
 _threshold = 0.5       # seuil métier
-_model_metrics = None  # dict des métriques enregistrées
 _model_name = "LightGBM_final"
 
+def normalize_feature_name(name: str) -> str:
+    """
+    Reproduit le nettoyage des noms de colonnes utilisé à l'entraînement.
+    (à adapter si besoin en fonction de ton notebook de modélisation)
+    """
+    return (
+        name
+        .replace(" ", "_")   # espaces -> _
+        .replace("-", "_")   # tirets -> _
+        .replace(":", "")    # on enlève les ":" (comme dans Cash X-Sell: high)
+    )
+
+
 # -------------------------------------------------------------------
-# 2) Schémas Pydantic (request / response)
+# 2) Schémas Pydantic
 # -------------------------------------------------------------------
 class PredictionRequest(BaseModel):
-    """
-    Requête de prédiction :
-    - features : dictionnaire {nom_feature: valeur}
-    """
     features: Dict[str, float]
 
 
 class PredictionResponse(BaseModel):
-    """
-    Réponse de prédiction :
-    - probability : proba de défaut (classe 1)
-    - prediction  : 0 / 1 selon le seuil métier
-    - threshold   : seuil utilisé
-    - model_name  : petit label pour info
-    """
     probability: float
     prediction: int
     threshold: float
@@ -59,23 +57,19 @@ class HealthResponse(BaseModel):
 # 3) Fonction de chargement du modèle
 # -------------------------------------------------------------------
 def load_model():
-    """Charge le modèle depuis le fichier joblib."""
-    global _model, _threshold, _model_metrics
+    global _model, _threshold
 
     if not os.path.exists(MODEL_PATH):
         raise RuntimeError(f"Fichier de modèle introuvable : {MODEL_PATH}")
 
     bundle = joblib.load(MODEL_PATH)
-    # Tu as sauvegardé un dict {"model": ..., "threshold": ..., "metrics": ...}
+
     if isinstance(bundle, dict):
         _model = bundle.get("model", None)
         _threshold = float(bundle.get("threshold", 0.5))
-        _model_metrics = bundle.get("metrics", None)
     else:
-        # Cas de secours : si jamais tu charges directement le pipeline
         _model = bundle
         _threshold = 0.5
-        _model_metrics = None
 
     if _model is None:
         raise RuntimeError("Impossible de récupérer 'model' depuis le bundle joblib.")
@@ -84,7 +78,7 @@ def load_model():
 
 
 # -------------------------------------------------------------------
-# 4) Création de l'appli FastAPI
+# 4) App FastAPI
 # -------------------------------------------------------------------
 app = FastAPI(
     title="Home Credit Default Risk - Scoring API",
@@ -93,25 +87,30 @@ app = FastAPI(
 )
 
 
-# -------------------------------------------------------------------
-# 5) Évènement de démarrage : on charge le modèle une seule fois
-# -------------------------------------------------------------------
 @app.on_event("startup")
 async def startup_event():
     try:
         load_model()
     except Exception as e:
-        # On logge l'erreur dans la console, l'API démarrera quand même mais /health l’indiquera
         print(f"[API] Erreur au chargement du modèle : {e}")
 
 
 # -------------------------------------------------------------------
-# 6) Endpoints
+# 5) Endpoints
 # -------------------------------------------------------------------
+@app.get("/", response_model=HealthResponse)
+def root():
+    """Petit endpoint d'accueil + état du modèle."""
+    is_loaded = _model is not None
+    return HealthResponse(
+        status="ok" if is_loaded else "model_not_loaded",
+        model_loaded=is_loaded,
+        model_path=MODEL_PATH,
+    )
+
 
 @app.get("/health", response_model=HealthResponse)
 def health_check():
-    """Endpoint de santé simple pour vérifier que l'API tourne et que le modèle est chargé."""
     is_loaded = _model is not None
     return HealthResponse(
         status="ok" if is_loaded else "model_not_loaded",
@@ -122,24 +121,16 @@ def health_check():
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict(request: PredictionRequest):
-    """
-    Endpoint principal de prédiction.
-    On attend un JSON du type :
-    {
-        "features": {
-            "EXT_SOURCE_1": 0.5,
-            "EXT_SOURCE_2": 0.3,
-            ...
-        }
-    }
-    """
-
     if _model is None:
         raise HTTPException(status_code=500, detail="Modèle non chargé.")
 
-    # 1) Conversion dict -> DataFrame (1 ligne)
+    # 1) Normaliser les noms de features (pour coller à ceux vus au fit)
     try:
-        df = pd.DataFrame([request.features])
+        norm_features = {
+            normalize_feature_name(k): v
+            for k, v in request.features.items()
+        }
+        df = pd.DataFrame([norm_features])
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur de parsing des features : {e}")
 
@@ -149,7 +140,6 @@ def predict(request: PredictionRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors de la prédiction : {e}")
 
-    # 3) Application du seuil métier
     pred = int(proba >= _threshold)
 
     return PredictionResponse(
