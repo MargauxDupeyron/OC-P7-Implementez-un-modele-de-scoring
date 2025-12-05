@@ -1,4 +1,5 @@
-import os
+import os, sys
+import json
 import math
 import base64
 import requests
@@ -8,270 +9,340 @@ import streamlit as st
 import shap
 import joblib
 import matplotlib.pyplot as plt
-import json
 import re
 
 from dotenv import load_dotenv
-from PIL import Image
 
-# -------------------------------------------------------------------
-# 1. CONFIGURATION DE BASE
-# -------------------------------------------------------------------
+
+# =========================================================
+# 1. INIT CONFIG
+# =========================================================
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(ROOT_DIR)
+
 load_dotenv()
 
 API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
-TEST_PATH = os.getenv("TEST_DATA_PATH", "data/processed/test_mean_imputed.csv")
 
-# Charger pipeline final (imputer + modèle)
+DATA_PATH = "data/processed/df_filtre.csv"
+
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-PIPELINE_PATH = os.path.abspath(os.path.join(APP_DIR, "../models/final_lightgbm_model.joblib"))
 
-model_dict = joblib.load(PIPELINE_PATH)
-final_lgbm = model_dict["model"]
+MODEL_PATH = os.path.abspath(os.path.join(APP_DIR, "../models/final_lightgbm_model.joblib"))
+FEATURES_PATH = os.path.abspath(os.path.join(APP_DIR, "../models/feature_names.json"))
+FEATUREBUILDER_PATH = os.path.abspath(os.path.join(APP_DIR, "../models/featurebuilder.pkl"))
 
-# Pipeline
-imputer = final_lgbm.named_steps["imputer"]
-model = final_lgbm.named_steps["model"]
 
-# Explainer SHAP
+# =========================================================
+# 2. LOAD MODEL + FEATURES
+# =========================================================
+
+model = joblib.load(MODEL_PATH)
+feature_builder = joblib.load(FEATUREBUILDER_PATH)
+
+with open(FEATURES_PATH, "r") as f:
+    FEATURE_NAMES = json.load(f)
+
 explainer = shap.TreeExplainer(model)
 
-# -------------------------------------------------------------------
-# 2. FONCTIONS UTILES
-# -------------------------------------------------------------------
 
-def normalize_colname(col):
-    """⭐ Normalisation complète des colonnes pour matcher le modèle."""
-    col = col.strip()
-    col = col.replace(" ", "_")
-    col = col.replace("-", "_")
-    col = col.replace(":", "_")
-    col = col.replace("/", "_")
-    col = re.sub(r"__+", "_", col)
-    return col
+# =========================================================
+# 3. UTILS
+# =========================================================
 
-def clean_sample_for_api(sample: dict) -> dict:
-    """Remplace les NaN par None pour JSON."""
-    return {
-        k: (None if (isinstance(v, float) and math.isnan(v)) else v)
-        for k, v in sample.items()
-    }
+def normalize_col(c):
+    return re.sub(r"[^A-Za-z0-9_]", "_", c.strip())
+
 
 @st.cache_data
-def load_test_data(path: str) -> pd.DataFrame:
+def load_test_data(path):
     df = pd.read_csv(path)
-    if "TARGET" in df.columns:
-        df = df.drop(columns=["TARGET"])
-    # ⭐ Normalisation juste après chargement
-    df.columns = [normalize_colname(c) for c in df.columns]
+    df.columns = [normalize_col(c) for c in df.columns]
     return df
+
+
+def clean_for_api(d):
+    """Transforme NaN → None pour API JSON."""
+    return {k: (None if (isinstance(v, float) and math.isnan(v)) else v) for k, v in d.items()}
+
+
+def prepare_features(df_row):
+    df = pd.DataFrame([df_row])
+    df2 = feature_builder.transform(df)
+    return df2.reindex(columns=FEATURE_NAMES)
+
 
 def load_image_base64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
-# Charger les features utilisées au moment du fit
-FEATURES_PATH = os.path.abspath(os.path.join(APP_DIR, "../models/features.json"))
-with open(FEATURES_PATH, "r") as f:
-    FEATURES = json.load(f)
 
-def align_features(df, features_expected):
-    """⭐ Alignement + normalisation obligatoire."""
-    df = df.copy()
-    df.columns = [normalize_colname(c) for c in df.columns]
+# =========================================================
+# 4. STREAMLIT UI SETUP
+# =========================================================
 
-    # Ajouter colonnes manquantes
-    for col in features_expected:
-        if col not in df.columns:
-            df[col] = np.nan
+st.set_page_config(page_title="Home Credit Scoring", layout="wide")
 
-    # Retirer colonnes inutiles
-    df = df[features_expected]
-    return df
-
-# -------------------------------------------------------------------
-# 3. CONFIG STREAMLIT
-# -------------------------------------------------------------------
-st.set_page_config(page_title="Home Credit – API de scoring", layout="wide")
-
-# -------------------------------------------------------------------
-# 4. BANNIÈRE
-# -------------------------------------------------------------------
+# Banner
 BANNER_PATH = os.path.join(APP_DIR, "banner.png")
-
 if os.path.exists(BANNER_PATH):
-    img_base64 = load_image_base64(BANNER_PATH)
+    img64 = load_image_base64(BANNER_PATH)
     st.markdown(
-        f"""
-        <div style="text-align:center;">
-            <img src="data:image/png;base64,{img_base64}" style="width:600px; margin-bottom:20px;">
-        </div>
-        """,
-        unsafe_allow_html=True,
+        f"""<div style="text-align:center;">
+            <img src="data:image/png;base64,{img64}" style="width:600px;">
+        </div>""",
+        unsafe_allow_html=True
     )
-else:
-    st.warning(f"Image non trouvée : {BANNER_PATH}")
 
-# bandeau API
+# API info
 st.markdown(
-    f"""
-    <div style="padding:0.6rem 1rem; border-radius:0.5rem;
-                background:linear-gradient(90deg,#0f4c75,#3282b8);
-                color:white; margin-bottom:1rem;">
-        <strong>🔌 API utilisée :</strong> {API_URL}
-    </div>
-    """,
-    unsafe_allow_html=True,
+    f"""<div style="padding:0.6rem; background:#0f4c75; color:white; border-radius:8px;">
+        API utilisée : <strong>{API_URL}</strong>
+    </div>""",
+    unsafe_allow_html=True
 )
 
-st.title("🏦 Home Credit – Démo de scoring & explicabilité")
+st.title("🏦 Home Credit – Scoring & Explicabilité")
 
-# -------------------------------------------------------------------
-# 5. CHARGEMENT DES DONNÉES
-# -------------------------------------------------------------------
+
+# =========================================================
+# 5. LOAD DATA
+# =========================================================
+
 try:
-    df_test = load_test_data(TEST_PATH)
+    df_test = load_test_data(DATA_PATH)
 except Exception as e:
-    st.error(f"❌ Erreur chargement test : {e}")
+    st.error(f"Erreur chargement des données : {e}")
     st.stop()
 
 n_rows = len(df_test)
 
-# -------------------------------------------------------------------
-# 6. SELECTION DU CLIENT
-# -------------------------------------------------------------------
-st.markdown("## 1️⃣ Sélection du client")
 
-col_left, col_right = st.columns([2, 1])
+# =============================
+# 6. Sélection du client
+# =============================
 
-with col_left:
-    tab1, tab2 = st.tabs(["🔢 Saisie manuelle", "🎚️ Slider"])
+st.subheader("1️⃣ Sélection du client")
 
-    with tab1:
-        idx = st.number_input(
-            "Numéro de client (index)",
-            min_value=0, max_value=n_rows - 1, value=0
-        )
+# 🔹 état persistant
+if "idx" not in st.session_state:
+    st.session_state.idx = 0
 
-    with tab2:
-        idx = st.slider("Choix visuel de l’index", 0, n_rows - 1, 0)
+max_idx = n_rows - 1  # ⭐ valeur réelle max
 
-with col_right:
-    st.metric("Nombre total de clients (test)", n_rows)
+# Petit encadré esthétique
+st.markdown(
+    f"""
+    <div style="
+        padding: 12px;
+        border: 1px solid #DDD;
+        border-radius: 8px;
+        background-color: #FAFAFA;
+        margin-bottom: 10px;
+    ">
+        <strong>Saisir un index client (entre 0 et {max_idx}) :</strong>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-sample = df_test.iloc[idx]  # ⭐ Colonnes déjà normalisées plus haut
+# Champ pour saisir l'index
+idx_text = st.text_input("Index client :", value=str(st.session_state.idx))
 
-st.markdown("### 🔍 Détails du client")
-st.dataframe(sample.to_frame(name="valeur"), use_container_width=True)
+# Validation
+try:
+    idx = int(idx_text)
+    if idx < 0:
+        idx = 0
+    if idx > max_idx:
+        idx = max_idx
+except:
+    st.warning("Veuillez saisir un entier valide.")
+    idx = st.session_state.idx  # reste sur l’ancien
 
-# -------------------------------------------------------------------
-# 7. STATUT API
-# -------------------------------------------------------------------
-st.markdown("## 2️⃣ Statut de l’API")
+# Sauvegarde dans session_state
+st.session_state.idx = idx
+
+# Sélection du client
+sample = df_test.iloc[idx]
+
+st.write(f"### 🔍 Client sélectionné : **#{idx}**")
+st.dataframe(sample.to_frame("valeur"), use_container_width=True)
+
+
+# =========================================================
+# 7. API STATUS
+# =========================================================
+
+st.subheader("2️⃣ Statut de l’API")
 
 try:
-    health = requests.get(f"{API_URL}/health", timeout=20)
-    if health.status_code == 200:
+    r = requests.get(f"{API_URL}/")
+    if r.status_code == 200:
         st.success("API opérationnelle ✔️")
     else:
-        st.warning(f"API répond avec le code {health.status_code}")
+        st.warning(f"L’API répond : {r.status_code}")
 except:
     st.error("❌ API non joignable")
+    st.stop()
 
-# -------------------------------------------------------------------
-# 8. PREDICTION & SHAP
-# -------------------------------------------------------------------
-st.markdown("## 3️⃣ Prédiction & Explicabilité")
 
-if st.button("🚀 Lancer la prédiction pour ce client"):
+# =========================================================
+# 8. PREDICTION
+# =========================================================
+
+st.subheader("3️⃣ Prédiction & Explicabilité")
+
+payload = {"data": clean_for_api(sample.to_dict())}
+
+if st.button("🚀 Lancer la prédiction"):
+
     with st.spinner("Calcul en cours..."):
 
-        # ---- API PRED ----
-        clean_features = clean_sample_for_api(sample.to_dict())
-        payload = {"features": clean_features}
-
+        # -------------------------
+        # Call API
+        # -------------------------
         try:
-            resp = requests.post(f"{API_URL}/predict", json=payload, timeout=20)
-            result = resp.json()
+            resp = requests.post(f"{API_URL}/predict_proba", json=payload)
+            pred = resp.json()
         except Exception as e:
-            st.error(f"❌ Erreur API : {e}")
+            st.error(f"Erreur API : {e}")
             st.stop()
 
-        prob = result.get("probability")
-        pred = result.get("prediction")
-        thr = result.get("threshold")
+        proba = pred["probability_default"]
+        decision = pred["decision"]
+        thr = pred["threshold_used"]
 
-        tab_pred, tab_local, tab_global = st.tabs(
-            ["🧮 Prédiction", "🔍 SHAP locale", "🌍 SHAP globale"]
-        )
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Probabilité défaut", f"{proba:.3f}")
+        c2.metric("Décision", "❌ Risque" if decision else "✔️ Accepté")
+        c3.metric("Seuil métier", thr)
 
-        # ---- PRED ----
-        with tab_pred:
-            st.subheader("📌 Résultat")
-            st.metric("Probabilité", f"{prob:.3f}")
-            st.metric("Décision", "Risque" if pred else "Accepté")
-            st.metric("Seuil métier", f"{thr:.3f}")
+        # =========================================================
+        # SHAP FROM API
+        # =========================================================
+        shap_api = requests.post(f"{API_URL}/shap_explanation", json=payload).json()
 
-        # ---- SHAP LOCALE ----
+        # L'API renvoie directement la liste des 84 valeurs
+        shap_values = np.array(shap_api["shap_values"])
+
+
+        expected_value = shap_api["expected_value"]
+        feature_values = shap_api["features"]
+        feature_names = shap_api["feature_names"]
+
+        df_explain = pd.DataFrame([feature_values], columns=feature_names)
+
+        # =========================================================
+        # TABS : Profil Client | SHAP Local | SHAP Global
+        # =========================================================
+
+        tab_profile, tab_local, tab_global = st.tabs([
+            "🧑‍💼 Profil client",
+            "🔍 SHAP Local",
+            "🌍 SHAP Global"
+        ])
+
+        # ================================
+        # 🧑‍💼 ONGLET PROFIL CLIENT
+        # ================================
+        with tab_profile:
+
+            st.markdown("### Comparaison du client vs population")
+
+            # Sélectionner les 10 premières variables numériques
+            num_cols = df_test.select_dtypes(include=["float", "int"]).columns[:10]
+
+            col1, col2 = st.columns(2)
+
+            for i, col in enumerate(num_cols):
+                fig, ax = plt.subplots(figsize=(5, 3))
+                ax.hist(df_test[col].dropna(), bins=30, alpha=0.6, label="Population")
+                ax.axvline(sample[col], color="red", linewidth=2, label="Client")
+                ax.set_title(col)
+                ax.legend()
+
+                if i < 5:
+                    col1.pyplot(fig)
+                else:
+                    col2.pyplot(fig)
+
+                plt.close(fig)
+
+
+        # ================================
+        # 🔍 ONGLET SHAP LOCAL
+        # ================================
         with tab_local:
-            st.subheader("🔍 SHAP locale")
 
-            x_client = align_features(sample.to_frame().T, FEATURES)
-            x_client_imp = imputer.transform(x_client)
+            st.markdown("### SHAP – Importance locale du client")
 
-            shap_client = explainer(x_client_imp)
+            # SHAP values déjà reçus depuis l'API
+            shap_values_np = np.array(shap_values).reshape(-1)
 
-            fig_force = shap.force_plot(
-                shap_client.base_values[0],
-                shap_client.values[0],
-                x_client,
-                matplotlib=True,
-                show=False
+            explanation = shap.Explanation(
+                values=shap_values_np,
+                base_values=expected_value,
+                data=df_explain.values[0],
+                feature_names=feature_names
             )
-            st.pyplot(fig_force)
 
-        # ---- SHAP GLOBALE ----
+            fig = plt.figure(figsize=(6, 4))
+            shap.plots.waterfall(explanation, max_display=15, show=False)  # ⭐ compact & professionnel
+            st.pyplot(fig)
+            plt.close(fig)
+
+
+
+        # ================================
+        # 🌍 ONGLET SHAP GLOBAL
+        # ================================
         with tab_global:
-            st.subheader("🌍 SHAP globale")
 
-            X_sample = df_test.sample(n=1500, random_state=42)
-            X_sample = align_features(X_sample, FEATURES)
-            X_sample_imp = imputer.transform(X_sample)
+            st.markdown("### 🌍 Importance globale (SHAP)")
 
-            shap_values = explainer(X_sample_imp)
+            # -----------------------------
+            # 1. Préparation des données
+            # -----------------------------
+            X_sample = df_test.sample(1000, random_state=42)
+            X_sample_fb = feature_builder.transform(X_sample)
+            X_sample_fb = X_sample_fb.reindex(columns=FEATURE_NAMES)
 
-            fig_summary = plt.figure(figsize=(10, 6))
-            shap.summary_plot(
-                shap_values.values,
-                X_sample,
-                feature_names=X_sample.columns.tolist(),
-                plot_type="violin",
-                max_display=20,
-                show=False
-            )
-            st.pyplot(fig_summary)
+            shap_global = explainer.shap_values(X_sample_fb)
+            if isinstance(shap_global, list):  # modèle binaire
+                shap_global = shap_global[1]
 
-            # barplot global
-            mean_abs_shap = np.abs(shap_values.values).mean(axis=0)
-            df_global = (
+            mean_abs = np.abs(shap_global).mean(axis=0)
+            df_import = (
                 pd.DataFrame({
-                    "feature": X_sample.columns,
-                    "mean_abs_shap": mean_abs_shap
+                    "feature": FEATURE_NAMES,
+                    "importance": mean_abs
                 })
-                .sort_values("mean_abs_shap", ascending=False)
+                .sort_values("importance", ascending=False)
                 .head(15)
-                .iloc[::-1]
             )
 
-            fig_gbar, ax = plt.subplots(figsize=(8, 6))
-            ax.barh(df_global["feature"], df_global["mean_abs_shap"])
-            ax.set_title("Top 15 – importance globale SHAP")
-            st.pyplot(fig_gbar)
+            # -----------------------------
+            # 2. Deux colonnes côte à côte
+            # -----------------------------
+            col1, col2 = st.columns(2)
 
+            # 🟦 Colonne 1 : Summary Plot
+            with col1:
+                st.markdown("### Summary Plot")
 
-# -------------------------------------------------------------------
-# FOOTER
-# -------------------------------------------------------------------
-st.markdown("---")
-st.caption("Projet 7 – API FastAPI · Streamlit · LightGBM · SHAP · Docker")
+                fig1 = plt.figure(figsize=(5, 4))
+                shap.summary_plot(shap_global, X_sample_fb, max_display=15, show=False)
+                st.pyplot(fig1)
+                plt.close(fig1)
 
+            # 🟥 Colonne 2 : Barplot Top 15
+            with col2:
+                st.markdown("### Top 15 variables")
+
+                fig2, ax = plt.subplots(figsize=(5, 4))
+                ax.barh(df_import["feature"][::-1], df_import["importance"][::-1], color="#2980b9")
+                ax.set_title("Importance globale (Top 15)")
+                st.pyplot(fig2)
+                plt.close(fig2)
