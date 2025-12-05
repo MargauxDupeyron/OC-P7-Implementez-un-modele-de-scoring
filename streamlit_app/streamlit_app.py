@@ -23,7 +23,7 @@ sys.path.append(ROOT_DIR)
 
 load_dotenv()
 
-API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
+API_URL = os.getenv("API_URL")
 
 DATA_PATH = "data/processed/df_filtre.csv"
 

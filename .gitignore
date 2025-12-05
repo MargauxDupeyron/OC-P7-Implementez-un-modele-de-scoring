@@ -1,9 +1,14 @@
+# ----------------------------------------
 # Environnements virtuels
+# ----------------------------------------
 .venv/
 venv/
 env/
+ENV/
 
-# Fichiers Python
+# ----------------------------------------
+# Python
+# ----------------------------------------
 __pycache__/
 *.py[cod]
 *.pyo
@@ -12,42 +17,104 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+*.spec
 
-# Notebooks checkpoints
+# ----------------------------------------
+# Notebooks
+# ----------------------------------------
 .ipynb_checkpoints/
 
-# Données (à adapter selon ce que tu veux versionner)
+# ----------------------------------------
+# Données (à NE PAS versionner)
+# ----------------------------------------
 data/raw/
 data/processed/
+data/interim/
+data/external/
 
+# Si certains fichiers doivent être gardés :
+# !data/processed/feature_names.json
+# !data/processed/df_filtre_sample.csv
+
+# ----------------------------------------
+# Modèles ML & artefacts
+# ----------------------------------------
+models/*.joblib
+models/*.pkl
+models/*.pytorch
+models/*.bin
+
+# Garde seulement les versions finales si tu veux :
+# !models/final_lightgbm_model.joblib
+# !models/featurebuilder.pkl
+# !models/feature_names.json
+
+# ----------------------------------------
 # MLflow
+# ----------------------------------------
 mlruns/
 mlartifacts/
 mlflow.db
-artifacts/
 
-# Logs, artefacts temporaires
+# ----------------------------------------
+# Logs & fichiers temporaires
+# ----------------------------------------
 logs/
 tmp/
 temp/
 *.log
 
-# Fichiers système
+# ----------------------------------------
+# Images générées & artefacts Streamlit
+# ----------------------------------------
+*.png
+*.jpg
+*.jpeg
+*.svg
+
+# Conserve les images UI nécessaires :
+!streamlit_app/banner.png
+
+# ----------------------------------------
+# Outils & IDE
+# ----------------------------------------
+.vscode/
+.idea/
+*.code-workspace
+
+# ----------------------------------------
+# Docker
+# ----------------------------------------
+*.tar
+*.img
+
+# ----------------------------------------
+# Windows & Mac files
+# ----------------------------------------
 .DS_Store
 Thumbs.db
 
-# VSCode / IDE
-.vscode/
-.idea/
-
-# HTML générés volumineux (sauf si tu veux les versionner)
-# reports/drift_report.html  # si tu préfères le livrer à part sans le suivre en Git
-
-# Docker
-*.tar
-
-# Cours/Rapports
-courses/
-reports/
+# ----------------------------------------
+# Rapports, PDF, CSV volumineux
+# ----------------------------------------
 *.pdf
 *.csv
+*.xlsx
+*.xls
+
+# (Décommente si tu veux garder certains CSV)
+# !data/df_filtre_sample.csv
+
+# ----------------------------------------
+# API & secrets
+# ----------------------------------------
+.env
+.env.*
+
+
+# ----------------------------------------
+# Tests & cache
+# ----------------------------------------
+.pytest_cache/
+.coverage
+htmlcov/
