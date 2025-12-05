@@ -1,6 +1,7 @@
 import pytest
 import json
 import joblib
+import requests
 
 @pytest.fixture
 def featurebuilder():
