@@ -68,24 +68,33 @@ Projet_7/
 ├── models/                   # Artefacts ML
 │   ├── final_lightgbm_model.joblib
 │   ├── featurebuilder.pkl
-│   └── feature_names.json
+│   ├── feature_names.json
+│   ├── model.pkl
+│   └── threshold.json
 │
 ├── src/
-│   └── api/
-│       └── app.py            # API FastAPI
+│   ├── api/
+│   │   ├── app.py            # API FastAPI
+│   │   └── schemas.py
+│   └── featurebuilder.py
 │
 ├── streamlit_app/
-│   └── streamlit_app.py      # Interface utilisateur
+│   ├── streamlit_app.py      # Interface utilisateur
+│   └── test_api.ipynb
 │
 ├── tests/
-│   ├── test_api.py
+│   ├── test_api_prediction.py
+│   ├── test_endpoint_structure.py
 │   ├── test_featurebuilder.py
+│   ├── test_model.py
 │   └── conftest.py
 │
 ├── reports/
-│   └── drift_report.html     # Rapport Evidently
+│   └── data_drift_train_vs_test.html     # Rapport Evidently
 │
 ├── Dockerfile                # Déploiement API
+├── projet7_modelisation_mlflow.ipynb
+├── data_drift_evidently.ipynb
 ├── requirements.txt          # Dépendances
 ├── pytest.ini                # Configuration des tests
 ├── README.md
@@ -227,7 +236,7 @@ cd Projet_7
 ```bash
 python -m venv .venv
 source .venv/bin/activate       # Mac/Linux  
-.\.venv\Scriptsctivate        # Windows
+.\.venv\Scripts\activate        # Windows
 
 pip install -r requirements.txt
 ```

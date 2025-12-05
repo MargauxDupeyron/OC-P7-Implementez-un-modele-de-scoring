@@ -101,6 +101,7 @@ Thumbs.db
 *.csv
 *.xlsx
 *.xls
+*.pptx
 
 # (Décommente si tu veux garder certains CSV)
 # !data/df_filtre_sample.csv
