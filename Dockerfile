@@ -39,12 +39,12 @@ COPY . .
 # 6. Variables d'environnement
 # ===========================
 # Chemin du modèle dans l'image Docker
-ENV MODEL_PATH="models/final_lightgbm_model.joblib"
+ENV MODEL_PATH="models/model.pkl"
 
 # Port d'écoute de l'API
-ENV API_PORT=8000
+ENV PORT=8000
 
 # ===========================
 # 7. Commande de lancement
 # ===========================
-CMD ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "$PORT"]
