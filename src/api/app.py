@@ -4,66 +4,67 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import joblib
 import pandas as pd
+import numpy as np
 import shap
 import traceback
+from src.utils.preprocessing import cleanup_inf_to_nan
 
-
-# =============================================
-# 🔧 CONFIGURATION DES CHEMINS
-# =============================================
+# =====================================================
+# CONFIGURATION DES CHEMINS
+# =====================================================
 BASE_DIR = Path(__file__).resolve().parents[2]
-MODEL_PATH = BASE_DIR / "models" / "final_lightgbm_model.joblib"
+MODEL_PATH = BASE_DIR / "models" / "model.pkl"          # ✔ pipeline final
 FEATURES_PATH = BASE_DIR / "models" / "feature_names.json"
 THRESHOLD_PATH = BASE_DIR / "models" / "threshold.json"
-FEATUREBUILDER_PATH = BASE_DIR / "models" / "featurebuilder.pkl"
-
-# =============================================
-# 🚀 INITIALISATION FASTAPI
-# =============================================
-app = FastAPI(title="Home Credit API", version="1.0")
 
 
-# =============================================
-# 📥 SCHEMA D'ENTRÉE (simple)
-# =============================================
+# =====================================================
+# INITIALISATION FASTAPI
+# =====================================================
+app = FastAPI(title="Home Credit API", version="2.0")
+
+
+# =====================================================
+# INPUT UTILISATEUR
+# =====================================================
 class ClientData(BaseModel):
     data: dict
 
 
-# =============================================
-# 📦 CHARGEMENT DES RESSOURCES
-# =============================================
+# =====================================================
+# CHARGEMENT DES RESSOURCES
+# =====================================================
+print("Chargement du modèle pipeline…")
+model = joblib.load(MODEL_PATH)     # 👉 Pipeline complet
+print("   ✔ Pipeline chargé :", type(model))
 
-print("📂 Chargement du modèle…")
-model = joblib.load(MODEL_PATH)   # 👉 LightGBM pur
-print("   ✔ Modèle OK :", type(model))
-
-print("📂 Chargement FeatureBuilder…")
-feature_builder = joblib.load(FEATUREBUILDER_PATH)
-print("   ✔ FeatureBuilder OK")
-
-print("📂 Chargement features…")
+print("Chargement features…")
 with open(FEATURES_PATH, "r") as f:
     feature_names = json.load(f)
-print("   ✔", len(feature_names), "features chargées")
+print("   ✔", len(feature_names), "features")
 
-print("📂 Chargement du seuil métier…")
+print("Chargement du seuil métier…")
 with open(THRESHOLD_PATH, "r") as f:
     threshold_data = json.load(f)
 threshold = threshold_data["threshold"]
-print("   ✔ Seuil utilisé =", threshold)
+print("   ✔ Seuil =", threshold)
 
-# =============================================
+
+# =====================================================
 # 🌳 SHAP INITIALISATION
-# =============================================
-print("📂 Initialisation SHAP…")
-explainer = shap.TreeExplainer(model)   # 👉 LightGBM pur
-print("   ✔ SHAP prêt")
+# =====================================================
+print("Initialisation SHAP…")
+
+# On récupère le vrai modèle LGBM à l’intérieur du pipeline
+model_lgbm = model.named_steps["model"]
+
+explainer = shap.TreeExplainer(model_lgbm)
+print("   ✔ SHAP initialisé")
 
 
-# =============================================
-# 🏁 ROUTE RACINE
-# =============================================
+# =====================================================
+# ROUTE RACINE
+# =====================================================
 @app.get("/")
 def root():
     return {
@@ -74,36 +75,45 @@ def root():
     }
 
 
-# =============================================
-# 🔧 FONCTION PRÉPARATION FEATURES
-# =============================================
+# =====================================================
+# HEALTH CHECK
+# =====================================================
+@app.get("/health")
+def health_check():
+    return {
+        "status": "ok",
+        "model_loaded": model is not None,
+        "n_features": len(feature_names)
+    }
+
+
+# =====================================================
+# PREPARATION DES FEATURES
+# =====================================================
 def prepare_features(input_dict: dict) -> pd.DataFrame:
 
     df = pd.DataFrame([input_dict])
 
-    # 1) FeatureBuilder : ajoute/retire colonnes
-    df_clean = feature_builder.transform(df)
+    # On applique EXACTEMENT les colonnes attendues par le modèle final
+    df = df.reindex(columns=feature_names, fill_value=0)
 
-    # 2) Réordonnancement exact
-    df_clean = df_clean[feature_names]
+    print("Colonnes envoyées au modèle :", list(df.columns))
+    print("Shape =", df.shape)
 
-    print("📌 Colonnes envoyées au modèle :", df_clean.columns.tolist())
-    print("📌 Nombre colonnes :", df_clean.shape[1])
-
-    return df_clean
+    return df
 
 
-# =============================================
-# 🔥 ENDPOINT PREDICTION
-# =============================================
+# =====================================================
+# ENDPOINT PREDICTION
+# =====================================================
 @app.post("/predict_proba")
-def predict_proba(payload: ClientData):
+def predict(payload: ClientData):
 
     try:
-        input_data = payload.data
-        df_prepared = prepare_features(input_data)
+        # 1) On prépare les features
+        df_prepared = prepare_features(payload.data)
 
-        # LightGBM pur → predict_proba OK
+        # 2) Le pipeline s’occupe du reste (cleanup + imputer + LGBM)
         proba = float(model.predict_proba(df_prepared)[:, 1])
 
         decision = 1 if proba >= threshold else 0
@@ -115,43 +125,62 @@ def predict_proba(payload: ClientData):
         }
 
     except Exception as e:
-        print("\n🔥 ERREUR DÉTAILLÉE :")
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Erreur modèle : {str(e)}")
+        raise HTTPException(500, f"Erreur modèle : {str(e)}")
 
 
-# =============================================
-# 📊 ENDPOINT SHAP LOCAL (VERSION PROPRE & ROBUSTE)
-# =============================================
+# =====================================================
+# ENDPOINT SHAP LOCAL
+# =====================================================
 @app.post("/shap_explanation")
 def shap_local(payload: ClientData):
 
     try:
-        # 1) Extraction des données envoyées
+        # -----------------------
+        # Safe float converter
+        # -----------------------
+        def safe_float(x) -> float:
+            try:
+                return float(x)
+            except Exception:
+                return 0.0
+
+        # 1) Input
         input_data = payload.data
 
-        # 2) Préparation des features (FeatureBuilder + réordonnancement)
+        # 2) FeatureBuilder + reorder
         df_prepared = prepare_features(input_data)
 
-        # 3) Calcul des SHAP values
+        # 3) SHAP values
         shap_values = explainer.shap_values(df_prepared)
-
-        # Pour modèles binaires LightGBM → shap_values = [classe0, classe1]
         if isinstance(shap_values, list):
             shap_values = shap_values[1]
 
-        # 4) Expected value (LightGBM renvoie parfois une liste)
-        if isinstance(explainer.expected_value, list):
-            expected_val = explainer.expected_value[1]
-        else:
-            expected_val = explainer.expected_value
+        # 4) Expected value
+        raw_expected = (
+            explainer.expected_value[1]
+            if isinstance(explainer.expected_value, list)
+            else explainer.expected_value
+        )
+        expected_value = safe_float(raw_expected)
 
-        # 5) Construction du JSON de réponse
+        # 5) SHAP + features cleaned
+        shap_values_clean: list[float] = [
+            safe_float(v) for v in shap_values[0].tolist()
+        ]
+
+        feature_values_clean: list[float] = [
+            safe_float(v) for v in df_prepared.iloc[0].tolist()
+        ]
+
+        feature_names_clean: list[str] = df_prepared.columns.tolist()
+
+        # 6) JSON
         explanation = {
-            "expected_value": float(expected_val),
-            "shap_values": shap_values[0].tolist(),
-            "features": df_prepared.iloc[0].tolist(),
-            "feature_names": df_prepared.columns.tolist()
+            "expected_value": expected_value,
+            "shap_values": shap_values_clean,
+            "features": feature_values_clean,
+            "feature_names": feature_names_clean
         }
 
         return explanation
@@ -162,3 +191,50 @@ def shap_local(payload: ClientData):
             status_code=500,
             detail=f"Erreur SHAP : {str(e)}"
         )
+
+# =====================================================
+# ENDPOINT SHAP GLOBAL
+# =====================================================
+
+@app.get("/shap_global")
+def shap_global():
+    """
+    Renvoie les SHAP values globales (summary plot + top 15).
+    """
+    try:
+        # Récupération du modèle brut LGBM depuis le pipeline
+        lgbm = model.named_steps["model"]
+
+        # Chargement d'un échantillon du dataset d'entraînement
+        SAMPLE_PATH = BASE_DIR / "data" / "processed" / "df_test.csv"
+        df = pd.read_csv(SAMPLE_PATH)
+
+        # Retrait de la colonne TARGET si présente
+        df = df.drop(columns=["TARGET"], errors="ignore")
+
+        # Forcer les colonnes dans le même ordre que le modèle
+        df = df.reindex(columns=feature_names, fill_value=0)
+
+        # Échantillonner pour éviter une charge élevée
+        df_sample = df.sample(1000, random_state=42)
+
+        # Tout convertir en float (pour éviter pyarrow error)
+        df_sample = df_sample.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+
+        # SHAP global
+        explainer = shap.TreeExplainer(lgbm)
+        shap_vals = explainer.shap_values(df_sample)
+
+        # Si modèle binaire → garder la classe 1
+        if isinstance(shap_vals, list):
+            shap_vals = shap_vals[1]
+
+        return {
+            "feature_names": feature_names,
+            "shap_values": shap_vals.tolist(),
+            "data": df_sample.values.tolist()
+        }
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, f"Erreur SHAP global : {str(e)}")
