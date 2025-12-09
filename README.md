@@ -4,13 +4,13 @@ Ce dépôt contient l’ensemble du travail réalisé pour le **Projet 7 du parc
 
 🎯 Objectif : **mettre en production un modèle de scoring** capable de prédire la probabilité de défaut de clients, via :
 
-- 🔧 Feature engineering & modèle ML (LightGBM)  
-- ⚙️ Pipeline complet de transformation & prédiction  
-- 🚀 API FastAPI dockerisée et déployée sur Render  
-- 🖥 Interface utilisateur Streamlit connectée à l’API  
-- 🔍 Monitoring du Data Drift (Evidently)  
-- 🧪 Tests unitaires (pytest)  
-- 🐳 Déploiement via Docker  
+- Feature engineering & modèle ML (LightGBM)  
+- Pipeline complet de transformation & prédiction  
+- API FastAPI dockerisée et déployée sur Render  
+- Interface utilisateur Streamlit connectée à l’API  
+- Monitoring du Data Drift (Evidently)  
+- Tests unitaires (pytest)  
+- Déploiement via Docker  
 
 ---
 
@@ -32,7 +32,7 @@ Ce dépôt contient l’ensemble du travail réalisé pour le **Projet 7 du parc
 
 Le projet consiste à industrialiser un **moteur de scoring** basé sur le dataset Home Credit, afin d’évaluer le risque de défaut d’un client.
 
-### 🔨 Modélisation
+### Modélisation
 - Nettoyage et préparation des données  
 - Feature engineering avancé  
 - Création d’un **FeatureBuilder** (pipeline preprocessing custom)  
@@ -43,7 +43,7 @@ Le projet consiste à industrialiser un **moteur de scoring** basé sur le datas
   - `feature_names.json`  
   - `threshold.json`
 
-### 🌐 Mise en production
+### Mise en production
 - Développement d’une **API REST** avec FastAPI  
 - Déploiement sur Render via Docker  
 - Endpoints :  
@@ -52,7 +52,7 @@ Le projet consiste à industrialiser un **moteur de scoring** basé sur le datas
   - `/shap_explanation` → SHAP local  
   - `/shap_global` → SHAP global  
 
-### 🖥 Interface Streamlit
+### Interface Streamlit
 L’application permet :
 - Sélection du client (index)  
 - Envoi des features à l’API Render  
@@ -65,13 +65,12 @@ L’application permet :
   - **SHAP global : summary plot + top features**  
 - Comparaison du client avec la population (histogrammes)
 
-### 📊 Monitoring
+### Monitoring
 - Analyse du drift entre train/test via **Evidently**  
 - Rapport complet exporté dans `reports/`
 
-### 🧪 Tests unitaires
+### Tests unitaires
 - Tests API  
-- Tests du FeatureBuilder  
 - Tests du modèle & des transformations  
 - Tests structurels des endpoints FastAPI  
 
@@ -82,7 +81,7 @@ L’application permet :
 ```
 Projet_7/
 │
-├── data/                     # Données locales (gitignore)
+├── data/                     # Données locales 
 │   └── processed/
 │       └── df_test_sample.csv
 │
@@ -93,11 +92,13 @@ Projet_7/
 │
 ├── src/
 │   ├── api/
-│   │   └── app.py            # API FastAPI
+│   │   ├── app.py            # API FastAPI
+│   │   └── schemas.py 
 │   └── utils/
 │       └── preprocessing.py
 │
 ├── streamlit_app/
+│   ├── test_api.ipynb
 │   └── streamlit_app.py      # Interface Streamlit
 │
 ├── tests/                    # Tests unitaires pytest
@@ -105,6 +106,8 @@ Projet_7/
 ├── reports/
 │   └── data_drift_report.html
 │
+├── data_drift_evidently.ipynb 
+├── projet7_modelisation_mlflow.ipynb   
 ├── Dockerfile                # Image Docker (Render)
 ├── requirements.txt
 ├── pytest.ini
@@ -115,7 +118,7 @@ Projet_7/
 
 ## 3. API FastAPI (local & Render)
 
-### ▶️ Lancer l’API en local
+### ▶Lancer l’API en local
 
 ```bash
 uvicorn src.api.app:app --reload
@@ -126,7 +129,7 @@ uvicorn src.api.app:app --reload
 
 ---
 
-### 🌍 Version déployée sur Render
+### Version déployée sur Render
 
 API disponible ici :  
 👉 **https://oc-p7-implementez-un-modele-de-scoring.onrender.com**
@@ -144,13 +147,13 @@ Endpoints :
 
 ## 4. Application Streamlit
 
-### ▶️ Lancement en local
+### ▶Lancement en local
 
 ```bash
 streamlit run streamlit_app/streamlit_app.py
 ```
 
-### 🔗 Utilisation avec l’API Render
+### Utilisation avec l’API Render
 
 Dans `streamlit_app.py` :
 
@@ -183,13 +186,13 @@ report.save_html("reports/data_drift_report.html")
 
 ## 6. Docker
 
-### 📦 Construire l’image
+### Construire l’image
 
 ```bash
 docker build -t projet7-api .
 ```
 
-### ▶️ Lancer le conteneur
+### Lancer le conteneur
 
 ```bash
 docker run -p 8000:8000 -e PORT=8000 projet7-api
@@ -199,7 +202,7 @@ docker run -p 8000:8000 -e PORT=8000 projet7-api
 
 ## 7. Tests unitaires
 
-### ▶️ Lancer les tests
+### Lancer les tests
 
 ```bash
 pytest -q
@@ -249,7 +252,7 @@ pip install -r requirements.txt
 
 ---
 
-## 10. 🎯 Résumé
+## 10. Résumé
 
 - ✔ API cloud + Docker  
 - ✔ Streamlit complet  
