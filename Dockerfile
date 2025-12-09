@@ -1,17 +1,14 @@
-# ===========================
+# # ===========================
 # 1. Image de base
 # ===========================
 FROM python:3.11-slim
 
-# Ne pas générer de .pyc et forcer le flush stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 # ===========================
 # 2. Dépendances système
 # ===========================
-# LightGBM a besoin de quelques libs (libgomp1).
-# build-essential sert à compiler certains paquets si besoin.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libgomp1 \
@@ -25,28 +22,30 @@ WORKDIR /app
 # ===========================
 # 4. Installation des dépendances Python
 # ===========================
-# On copie uniquement le fichier de requirements pour profiter du cache Docker
 COPY requirements.txt ./requirements.txt
-
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ===========================
-# 5. Copie du code dans l'image
+# 5. Copie du code
 # ===========================
 COPY . .
 
-COPY data/processed/df_test.csv ./data/processed/df_test.csv
+# ===========================
+# 6. Copie des fichiers nécessaires à SHAP Global
+# ===========================
+# ⚠️ Ce chemin est EXACTEMENT celui affiché dans ton arborescence
+COPY data/processed/df_test.csv /app/data/processed/df_test.csv
+
+# S'assurer que le dossier existe
+RUN mkdir -p /app/data/processed
 
 # ===========================
-# 6. Variables d'environnement
+# 7. Variables d'environnement
 # ===========================
-# Chemin du modèle dans l'image Docker
 ENV MODEL_PATH="models/model.pkl"
-
-# Port d'écoute de l'API
 ENV PORT=8000
 
 # ===========================
-# 7. Commande de lancement
+# 8. Commande de lancement
 # ===========================
 CMD ["sh", "-c", "uvicorn src.api.app:app --host 0.0.0.0 --port $PORT"]
