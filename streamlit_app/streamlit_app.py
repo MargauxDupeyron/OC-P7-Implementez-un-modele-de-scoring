@@ -13,6 +13,11 @@ import re
 
 from dotenv import load_dotenv
 
+print("=== DEBUG ENV ===")
+print("Current working directory:", os.getcwd())
+print("Env API_URL:", os.getenv("API_URL"))
+print("Files in CWD:", os.listdir())
+print("==================")
 
 # =========================================================
 # 1. INIT CONFIG
@@ -22,6 +27,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(ROOT_DIR)
 
 load_dotenv()
+print("After load_dotenv → API_URL =", os.getenv("API_URL"))
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 DATA_PATH = "data/processed/df_test.csv"
@@ -163,14 +169,18 @@ st.dataframe(sample.to_frame("valeur"), use_container_width=True)
 
 st.subheader("2️⃣ Statut de l’API")
 
+# Normalisation propre du base URL
+base_url = API_URL.rstrip("/")
+
 try:
-    r = requests.get(f"{API_URL}/")
+    r = requests.get(f"{base_url}/")
     if r.status_code == 200:
         st.success("API opérationnelle ✔️")
     else:
         st.warning(f"L’API répond : {r.status_code}")
-except:
-    st.error("❌ API non joignable")
+        st.code(r.text)
+except Exception as e:
+    st.error(f"❌ API non joignable : {e}")
     st.stop()
 
 
