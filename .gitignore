@@ -103,8 +103,8 @@ Thumbs.db
 *.xls
 *.pptx
 
-# (Décommente si tu veux garder certains CSV)
-# !data/df_filtre_sample.csv
+# Garder les fichiers nécessaires
+!data/processed/df_test.csv
 
 # ----------------------------------------
 # API & secrets
