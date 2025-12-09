@@ -11,7 +11,7 @@ from src.utils.preprocessing import cleanup_inf_to_nan
 
 
 # =====================================================
-# 🔧 CONFIGURATION DES CHEMINS
+# CONFIGURATION DES CHEMINS
 # =====================================================
 BASE_DIR = Path(__file__).resolve().parents[2]
 MODEL_PATH = BASE_DIR / "models" / "model.pkl"          # ✔ pipeline final
@@ -20,31 +20,31 @@ THRESHOLD_PATH = BASE_DIR / "models" / "threshold.json"
 
 
 # =====================================================
-# 🚀 INITIALISATION FASTAPI
+# INITIALISATION FASTAPI
 # =====================================================
 app = FastAPI(title="Home Credit API", version="2.0")
 
 
 # =====================================================
-# 📥 INPUT UTILISATEUR
+# INPUT UTILISATEUR
 # =====================================================
 class ClientData(BaseModel):
     data: dict
 
 
 # =====================================================
-# 📦 CHARGEMENT DES RESSOURCES
+# CHARGEMENT DES RESSOURCES
 # =====================================================
-print("📂 Chargement du modèle pipeline…")
+print("Chargement du modèle pipeline…")
 model = joblib.load(MODEL_PATH)     # 👉 Pipeline complet
 print("   ✔ Pipeline chargé :", type(model))
 
-print("📂 Chargement features…")
+print("Chargement features…")
 with open(FEATURES_PATH, "r") as f:
     feature_names = json.load(f)
 print("   ✔", len(feature_names), "features")
 
-print("📂 Chargement du seuil métier…")
+print("Chargement du seuil métier…")
 with open(THRESHOLD_PATH, "r") as f:
     threshold_data = json.load(f)
 threshold = threshold_data["threshold"]
@@ -54,9 +54,9 @@ print("   ✔ Seuil =", threshold)
 # =====================================================
 # 🌳 SHAP INITIALISATION
 # =====================================================
-print("📂 Initialisation SHAP…")
+print("Initialisation SHAP…")
 
-# 👉 On récupère le vrai modèle LGBM à l’intérieur du pipeline
+# On récupère le vrai modèle LGBM à l’intérieur du pipeline
 model_lgbm = model.named_steps["model"]
 
 explainer = shap.TreeExplainer(model_lgbm)
@@ -64,7 +64,7 @@ print("   ✔ SHAP initialisé")
 
 
 # =====================================================
-# 🏁 ROUTE RACINE
+# ROUTE RACINE
 # =====================================================
 @app.get("/")
 def root():
@@ -77,23 +77,35 @@ def root():
 
 
 # =====================================================
-# 🔧 PREPARATION DES FEATURES
+# HEALTH CHECK
+# =====================================================
+@app.get("/health")
+def health_check():
+    return {
+        "status": "ok",
+        "model_loaded": model is not None,
+        "n_features": len(feature_names)
+    }
+
+
+# =====================================================
+# PREPARATION DES FEATURES
 # =====================================================
 def prepare_features(input_dict: dict) -> pd.DataFrame:
 
     df = pd.DataFrame([input_dict])
 
-    # 👉 On applique EXACTEMENT les colonnes attendues par le modèle final
+    # On applique EXACTEMENT les colonnes attendues par le modèle final
     df = df.reindex(columns=feature_names, fill_value=0)
 
-    print("📌 Colonnes envoyées au modèle :", list(df.columns))
-    print("📌 Shape =", df.shape)
+    print("Colonnes envoyées au modèle :", list(df.columns))
+    print("Shape =", df.shape)
 
     return df
 
 
 # =====================================================
-# 🔥 ENDPOINT PREDICTION
+# ENDPOINT PREDICTION
 # =====================================================
 @app.post("/predict_proba")
 def predict(payload: ClientData):
@@ -119,7 +131,7 @@ def predict(payload: ClientData):
 
 
 # =====================================================
-# 📊 ENDPOINT SHAP LOCAL
+# ENDPOINT SHAP LOCAL
 # =====================================================
 @app.post("/shap_explanation")
 def shap_local(payload: ClientData):
