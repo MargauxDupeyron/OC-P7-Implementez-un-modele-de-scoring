@@ -33,8 +33,7 @@ COPY . .
 # ===========================
 # 6. Copie des fichiers nécessaires à SHAP Global
 # ===========================
-# ⚠️ Ce chemin est EXACTEMENT celui affiché dans ton arborescence
-COPY data/processed/df_test.csv /app/data/processed/df_test.csv
+COPY data/processed/df_test_sample.csv /app/data/processed/df_test_sample.csv
 
 # S'assurer que le dossier existe
 RUN mkdir -p /app/data/processed
