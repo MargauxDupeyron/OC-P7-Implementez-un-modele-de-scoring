@@ -47,4 +47,4 @@ ENV PORT=8000
 # ===========================
 # 7. Commande de lancement
 # ===========================
-CMD ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "$PORT"]
+CMD ["sh", "-c", "uvicorn src.api.app:app --host 0.0.0.0 --port $PORT"]
