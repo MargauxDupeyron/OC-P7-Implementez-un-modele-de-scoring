@@ -244,7 +244,6 @@ pip install -r requirements.txt
                                    ▼
                          ┌──────────────────────────────┐
                          │   Modèle ML (LightGBM)        │
-                         │   + FeatureBuilder            │
                          │   + feature_names.json        │
                          │   + threshold.json            │
                          └──────────────────────────────┘
