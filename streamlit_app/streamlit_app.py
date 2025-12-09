@@ -38,7 +38,7 @@ if API_URL is None or API_URL.strip() == "":
 API_URL = API_URL.strip()
 print("API_URL FINAL =", API_URL)
 
-DATA_PATH = "data/processed/df_test.csv"
+DATA_PATH = "data/processed/df_test_sample.csv"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # =========================================================

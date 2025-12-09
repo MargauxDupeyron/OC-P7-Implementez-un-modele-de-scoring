@@ -206,7 +206,7 @@ def shap_global():
         lgbm = model.named_steps["model"]
 
         # Chargement d'un échantillon du dataset d'entraînement
-        SAMPLE_PATH = BASE_DIR / "data" / "processed" / "df_test.csv"
+        SAMPLE_PATH = BASE_DIR / "data" / "processed" / "df_test_sample.csv"
         df = pd.read_csv(SAMPLE_PATH)
 
         # Retrait de la colonne TARGET si présente
