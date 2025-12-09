@@ -35,6 +35,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ===========================
 COPY . .
 
+COPY data/processed/df_test.csv ./data/processed/df_test.csv
+
 # ===========================
 # 6. Variables d'environnement
 # ===========================

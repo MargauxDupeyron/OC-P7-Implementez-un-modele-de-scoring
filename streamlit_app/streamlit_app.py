@@ -10,6 +10,7 @@ import shap
 import joblib
 import matplotlib.pyplot as plt
 import re
+import urllib.parse
 
 from dotenv import load_dotenv
 
@@ -26,10 +27,17 @@ print("==================")
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(ROOT_DIR)
 
-load_dotenv()
-print("After load_dotenv → API_URL =", os.getenv("API_URL"))
+dotenv_path = os.path.join(ROOT_DIR, ".env")
+load_dotenv(dotenv_path=dotenv_path, override=True)
 
-API_URL = os.getenv("API_URL", "http://localhost:8000")
+# --- API_URL sécurisée (fix définitif) ---
+API_URL = os.getenv("API_URL")
+if API_URL is None or API_URL.strip() == "":
+    API_URL = "https://oc-p7-implementez-un-modele-de-scoring.onrender.com"
+
+API_URL = API_URL.strip()
+print("API_URL FINAL =", API_URL)
+
 DATA_PATH = "data/processed/df_test.csv"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -40,7 +48,6 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 FEATURES_PATH = os.path.abspath(os.path.join(APP_DIR, "../models/feature_names.json"))
 with open(FEATURES_PATH, "r") as f:
     FEATURE_NAMES = json.load(f)
-
 
 # =========================================================
 # 3. UTILS
@@ -97,7 +104,6 @@ st.markdown(
 
 st.title("🏦 Home Credit – Scoring & Explicabilité")
 
-
 # =========================================================
 # 5. LOAD DATA
 # =========================================================
@@ -110,20 +116,17 @@ except Exception as e:
 
 n_rows = len(df_test)
 
-
-# =============================
+# =========================================================
 # 6. Sélection du client
-# =============================
+# =========================================================
 
 st.subheader("1️⃣ Sélection du client")
 
-# 🔹 état persistant
 if "idx" not in st.session_state:
     st.session_state.idx = 0
 
-max_idx = n_rows - 1  # ⭐ valeur réelle max
+max_idx = n_rows - 1
 
-# Petit encadré esthétique
 st.markdown(
     f"""
     <div style="
@@ -139,29 +142,25 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Champ pour saisir l'index
 idx_text = st.text_input("Index client :", value=str(st.session_state.idx))
 
-# Validation
 try:
     idx = int(idx_text)
-    if idx < 0:
-        idx = 0
-    if idx > max_idx:
-        idx = max_idx
+    idx = max(0, min(idx, max_idx))
 except:
     st.warning("Veuillez saisir un entier valide.")
-    idx = st.session_state.idx  # reste sur l’ancien
+    idx = st.session_state.idx
 
-# Sauvegarde dans session_state
 st.session_state.idx = idx
 
-# Sélection du client
 sample = df_test.iloc[idx]
 
 st.write(f"### Client sélectionné : **#{idx}**")
-st.dataframe(sample.to_frame("valeur"), use_container_width=True)
-
+df_display = pd.DataFrame({
+    "feature": sample.index,
+    "valeur": sample.astype(str).values
+})
+st.dataframe(df_display, use_container_width=True)
 
 # =========================================================
 # 7. API STATUS
@@ -169,20 +168,22 @@ st.dataframe(sample.to_frame("valeur"), use_container_width=True)
 
 st.subheader("2️⃣ Statut de l’API")
 
-# Normalisation propre du base URL
-base_url = API_URL.rstrip("/")
-
 try:
-    r = requests.get(f"{base_url}/")
+    # Construction URL 100% fiable
+    health_url = urllib.parse.urljoin(API_URL.rstrip("/") + "/", "/")
+    st.write("🔍 URL appelée :", health_url)
+
+    r = requests.get(health_url)
+
     if r.status_code == 200:
         st.success("API opérationnelle ✔️")
     else:
         st.warning(f"L’API répond : {r.status_code}")
         st.code(r.text)
+
 except Exception as e:
     st.error(f"❌ API non joignable : {e}")
     st.stop()
-
 
 # =========================================================
 # 8. PREDICTION
@@ -196,9 +197,6 @@ if st.button("🚀 Lancer la prédiction"):
 
     with st.spinner("Calcul en cours..."):
 
-        # -------------------------
-        # Call API
-        # -------------------------
         try:
             resp = requests.post(f"{API_URL}/predict_proba", json=payload)
             pred = resp.json()
@@ -215,12 +213,9 @@ if st.button("🚀 Lancer la prédiction"):
         c2.metric("Décision", "❌ Risque" if decision else "✔️ Accepté")
         c3.metric("Seuil métier", thr)
 
-        # =========================================================
-        # SHAP FROM API
-        # =========================================================
+        # SHAP Local
         shap_api = requests.post(f"{API_URL}/shap_explanation", json=payload).json()
 
-        # L'API renvoie directement la liste des 84 valeurs
         shap_values = np.array(shap_api["shap_values"])
         expected_value = shap_api["expected_value"]
         feature_values = shap_api["features"]
@@ -233,24 +228,16 @@ if st.button("🚀 Lancer la prédiction"):
             feature_names=feature_names
         )
 
-        # =========================================================
-        # TABS : Profil Client | SHAP Local | SHAP Global
-        # =========================================================
-
         tab_profile, tab_local, tab_global = st.tabs([
             "🧑‍💼 Profil client",
             "🔍 SHAP Local",
             "🌍 SHAP Global"
         ])
 
-        # ================================
-        # 🧑‍💼 ONGLET PROFIL CLIENT
-        # ================================
         with tab_profile:
 
             st.markdown("### Comparaison du client vs population")
 
-            # Sélectionner les 10 premières variables numériques
             num_cols = df_test.select_dtypes(include=["float", "int"]).columns[:10]
 
             col1, col2 = st.columns(2)
@@ -269,42 +256,28 @@ if st.button("🚀 Lancer la prédiction"):
 
                 plt.close(fig)
 
-
-        # ================================
-        # 🔍 ONGLET SHAP LOCAL
-        # ================================
+        # SHAP LOCAL
         with tab_local:
-
             st.markdown("### SHAP – Importance locale du client")
-
-            # SHAP values déjà reçus depuis l'API
             fig = plt.figure(figsize=(8, 6))
             shap.plots.waterfall(explanation, max_display=15, show=False)
             st.pyplot(fig)
             plt.close(fig)
 
-        # ================================
-        # 🌍 ONGLET SHAP GLOBAL
-        # ================================
+        # SHAP GLOBAL
         with tab_global:
-
             st.markdown("### 🌍 Importance globale (SHAP)")
-
-            # -----------------------------
-            # 1. Préparation des données
-            # -----------------------------
             shap_global_api = requests.get(f"{API_URL}/shap_global").json()
 
             if "feature_names" not in shap_global_api:
-                st.error("Erreur API : 'feature_names' absent dans la réponse SHAP global. Récupération impossible.")
+                st.error("Erreur API : 'feature_names' absent.")
                 st.write("Réponse brute :", shap_global_api)
                 st.stop()
-            
+
             feature_names = shap_global_api["feature_names"]
             shap_global = np.array(shap_global_api["shap_values"], dtype=float)
             X_global = np.array(shap_global_api["data"], dtype=float)
 
-            # Importance moyenne absolue
             mean_abs = np.abs(shap_global).mean(axis=0)
 
             df_import = (
@@ -316,12 +289,8 @@ if st.button("🚀 Lancer la prédiction"):
                 .head(15)
             )
 
-            # -----------------------------
-            # 2. Deux colonnes côte à côte
-            # -----------------------------
             col1, col2 = st.columns(2)
 
-            # 🟦 Summary Plot SHAP Global
             with col1:
                 st.markdown("### Summary Plot")
                 fig1 = plt.figure(figsize=(5, 4))
@@ -329,7 +298,6 @@ if st.button("🚀 Lancer la prédiction"):
                 st.pyplot(fig1)
                 plt.close(fig1)
 
-            # 🟥 Barplot TOP 15
             with col2:
                 st.markdown("### Top 15 variables")
                 fig2, ax = plt.subplots(figsize=(5, 4))
@@ -337,3 +305,4 @@ if st.button("🚀 Lancer la prédiction"):
                 ax.set_title("Importance globale (Top 15)")
                 st.pyplot(fig2)
                 plt.close(fig2)
+
