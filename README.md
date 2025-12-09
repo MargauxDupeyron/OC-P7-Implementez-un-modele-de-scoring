@@ -1,20 +1,20 @@
 # 🏦 Projet 7 — Implémentez un modèle de scoring
 
-Ce dépôt contient l’ensemble du travail réalisé pour le **Projet 7 du parcours Data Scientist (OpenClassrooms)**.  
-L’objectif : **mettre en production un modèle de scoring pour prédire la probabilité de défaut d’un client**, via :
+Ce dépôt contient l’ensemble du travail réalisé pour le **Projet 7 du parcours Data Scientist – OpenClassrooms**.
+
+🎯 Objectif : **mettre en production un modèle de scoring** capable de prédire la probabilité de défaut de clients, via :
 
 - 🔧 Feature engineering & modèle ML (LightGBM)  
-- ⚙️ Packaging du modèle et pipeline  
-- 🚀 API FastAPI déployée sur Render  
-- 🖥 Interface utilisateur Streamlit  
-- 🔍 Monitoring du data drift (Evidently)  
+- ⚙️ Pipeline complet de transformation & prédiction  
+- 🚀 API FastAPI dockerisée et déployée sur Render  
+- 🖥 Interface utilisateur Streamlit connectée à l’API  
+- 🔍 Monitoring du Data Drift (Evidently)  
 - 🧪 Tests unitaires (pytest)  
 - 🐳 Déploiement via Docker  
 
 ---
 
 ## 📌 Sommaire
-
 - [1. Description du projet](#1-description-du-projet)  
 - [2. Structure du projet](#2-structure-du-projet)  
 - [3. API FastAPI (local & Render)](#3-api-fastapi-local--render)  
@@ -22,39 +22,58 @@ L’objectif : **mettre en production un modèle de scoring pour prédire la pro
 - [5. Monitoring du Data Drift](#5-monitoring-du-data-drift)  
 - [6. Docker](#6-docker)  
 - [7. Tests unitaires](#7-tests-unitaires)  
-- [8. Installation & exécution](#8-installation--exécution)
+- [8. Installation & exécution](#8-installation--exécution)  
+- [9. Architecture du projet](#9-architecture-du-projet)  
+- [10. Résumé](#10-résumé)
 
 ---
 
 ## 1. Description du projet
 
-Le projet consiste à construire et industrialiser un **moteur de scoring** pour évaluer le risque de défaut de paiement des clients d’une institution financière (dataset Home Credit).
-
-Le travail réalisé inclut :
+Le projet consiste à industrialiser un **moteur de scoring** basé sur le dataset Home Credit, afin d’évaluer le risque de défaut d’un client.
 
 ### 🔨 Modélisation
+- Nettoyage et préparation des données  
 - Feature engineering avancé  
-- Pipeline de transformation (FeatureBuilder)  
-- Entraînement d’un modèle LightGBM  
+- Création d’un **FeatureBuilder** (pipeline preprocessing custom)  
+- Entraînement et optimisation d’un modèle **LightGBMClassifier**  
 - Optimisation du seuil métier  
-- Export des artefacts (modèle, features, pipeline)
+- Export des artefacts :  
+  - `model.pkl` (pipeline complet)  
+  - `feature_names.json`  
+  - `threshold.json`
 
 ### 🌐 Mise en production
-- Développement d’une **API REST** (FastAPI)
-- Déploiement sur **Render** via Docker
-- Interface Streamlit permettant :
-  - Sélection d’un client
-  - Prédiction en direct
-  - Explications SHAP locales & globales
-  - Visualisation profil client vs population
+- Développement d’une **API REST** avec FastAPI  
+- Déploiement sur Render via Docker  
+- Endpoints :  
+  - `/` → Healthcheck  
+  - `/predict_proba` → scoring  
+  - `/shap_explanation` → SHAP local  
+  - `/shap_global` → SHAP global  
+
+### 🖥 Interface Streamlit
+L’application permet :
+- Sélection du client (index)  
+- Envoi des features à l’API Render  
+- Affichage :
+  - probabilité de défaut  
+  - décision (accepté/refusé)  
+  - seuil métier  
+- Explicabilité :  
+  - **SHAP local : waterfall plot**  
+  - **SHAP global : summary plot + top features**  
+- Comparaison du client avec la population (histogrammes)
 
 ### 📊 Monitoring
-- Analyse automatique du Data Drift avec Evidently.ai
+- Analyse du drift entre train/test via **Evidently**  
+- Rapport complet exporté dans `reports/`
 
 ### 🧪 Tests unitaires
 - Tests API  
 - Tests du FeatureBuilder  
-- Tests de robustesse du modèle  
+- Tests du modèle & des transformations  
+- Tests structurels des endpoints FastAPI  
 
 ---
 
@@ -63,42 +82,33 @@ Le travail réalisé inclut :
 ```
 Projet_7/
 │
-├── data/                     # Données locales (ignorées par Git)
+├── data/                     # Données locales (gitignore)
+│   └── processed/
+│       └── df_test_sample.csv
 │
 ├── models/                   # Artefacts ML
-│   ├── final_lightgbm_model.joblib
-│   ├── featurebuilder.pkl
-│   ├── feature_names.json
 │   ├── model.pkl
+│   ├── feature_names.json
 │   └── threshold.json
 │
 ├── src/
 │   ├── api/
-│   │   ├── app.py            # API FastAPI
-│   │   └── schemas.py
-│   └── featurebuilder.py
+│   │   └── app.py            # API FastAPI
+│   └── utils/
+│       └── preprocessing.py
 │
 ├── streamlit_app/
-│   ├── streamlit_app.py      # Interface utilisateur
-│   └── test_api.ipynb
+│   └── streamlit_app.py      # Interface Streamlit
 │
-├── tests/
-│   ├── test_api_prediction.py
-│   ├── test_endpoint_structure.py
-│   ├── test_featurebuilder.py
-│   ├── test_model.py
-│   └── conftest.py
+├── tests/                    # Tests unitaires pytest
 │
 ├── reports/
-│   └── data_drift_train_vs_test.html     # Rapport Evidently
+│   └── data_drift_report.html
 │
-├── Dockerfile                # Déploiement API
-├── projet7_modelisation_mlflow.ipynb
-├── data_drift_evidently.ipynb
-├── requirements.txt          # Dépendances
-├── pytest.ini                # Configuration des tests
-├── README.md
-└── .gitignore
+├── Dockerfile                # Image Docker (Render)
+├── requirements.txt
+├── pytest.ini
+└── README.md
 ```
 
 ---
@@ -111,54 +121,54 @@ Projet_7/
 uvicorn src.api.app:app --reload
 ```
 
-### 📄 Documentation interactive
-
-Swagger UI :  
+### 📄 Documentation interactive  
 👉 http://localhost:8000/docs
+
+---
 
 ### 🌍 Version déployée sur Render
 
-API URL (exemple) :  
-👉 https://oc-p7-implementer-un-modele-de-scoring.onrender.com
+API disponible ici :  
+👉 **https://oc-p7-implementez-un-modele-de-scoring.onrender.com**
 
-### Variables d’environnement
+Endpoints :
 
-```
-MODEL_PATH=models/final_lightgbm_model.joblib
-```
+| Endpoint             | Description |
+|---------------------|-------------|
+| `/`                 | Healthcheck |
+| `/predict_proba`    | Prédiction du score client |
+| `/shap_explanation` | SHAP local |
+| `/shap_global`      | SHAP global |
 
 ---
 
 ## 4. Application Streamlit
 
-L’application Streamlit permet :
-
-- Sélection d’un client via index  
-- Envoi des données à l'API  
-- Visualisation prédiction + seuil métier  
-- Explications SHAP locales (waterfall + barplot)  
-- Explications SHAP globales (summary plot + top 15 features)  
-- Analyse du profil client vs population  
-
-### ▶️ Lancement
+### ▶️ Lancement en local
 
 ```bash
 streamlit run streamlit_app/streamlit_app.py
 ```
 
-Pour utiliser l’API cloud, modifier dans le script :
+### 🔗 Utilisation avec l’API Render
+
+Dans `streamlit_app.py` :
 
 ```python
-API_URL = "https://oc-p7-implementer-un-modele-de-scoring.onrender.com"
+API_URL = "https://oc-p7-implementez-un-modele-de-scoring.onrender.com"
 ```
+
+Fonctionnalités :
+- Prédiction en direct  
+- Décision métier  
+- Visualisation SHAP locale + globale  
+- Profil client vs population  
 
 ---
 
 ## 5. Monitoring du Data Drift
 
-Réalisé avec Evidently.ai.
-
-### Exemple d'exécution
+Exemple Evidently :
 
 ```python
 from evidently.report import Report
@@ -166,13 +176,8 @@ from evidently.metric_preset import DataDriftPreset
 
 report = Report(metrics=[DataDriftPreset()])
 report.run(reference_data=train_df, current_data=test_df)
-report.save_html("reports/drift_report.html")
+report.save_html("reports/data_drift_report.html")
 ```
-
-Le rapport identifie :  
-- Colonnes dérivantes  
-- Distribution avant/après  
-- Scores de drift  
 
 ---
 
@@ -187,73 +192,70 @@ docker build -t projet7-api .
 ### ▶️ Lancer le conteneur
 
 ```bash
-docker run -p 8000:8000 projet7-api
+docker run -p 8000:8000 -e PORT=8000 projet7-api
 ```
-
-L'API est alors accessible sur :  
-👉 http://localhost:8000  
-👉 http://localhost:8000/docs
 
 ---
 
 ## 7. Tests unitaires
 
-### ▶️ Exécuter les tests
+### ▶️ Lancer les tests
 
 ```bash
 pytest -q
 ```
 
-### Contenu des tests
-
-✔ `test_api.py`  
-- API disponible  
-- Retour formaté correctement  
-- Probabilité valide (0–1)
-
-✔ `test_featurebuilder.py`  
-- Le FeatureBuilder transforme correctement un échantillon  
-- Colonnes attendues présentes
-
-✔ Tests additionnels recommandés  
-- Test sur seuil métier  
-- Test valeurs manquantes  
-- Test formats non numériques  
-
 ---
 
 ## 8. Installation & exécution
 
-### 💾 Cloner le projet
-
 ```bash
-git clone https://github.com/MargauxDupeyron/OC-P7-Implementer-un-modele-de-scoring.git
-cd Projet_7
-```
+git clone https://github.com/MargauxDupeyron/OC-P7-Implementez-un-modele-de-scoring.git
+cd OC-P7-Implementez-un-modele-de-scoring
 
-### 🧰 Installer les dépendances
-
-```bash
 python -m venv .venv
-source .venv/bin/activate       # Mac/Linux  
-.\.venv\Scripts\activate        # Windows
-
+.\.venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
 ---
 
-## 🎯 Résumé
+## 9. Architecture du projet
 
-Ce projet couvre l’ensemble du cycle ML :
-
-- ✔ Industrialisation d’un modèle ML  
-- ✔ Mise en production via FastAPI  
-- ✔ Interface utilisateur Streamlit  
-- ✔ Monitoring du data drift  
-- ✔ Dockerisation  
-- ✔ Tests unitaires  
-- ✔ Déploiement cloud Render  
+```
+                           ┌────────────────────────────┐
+                           │        Utilisateur         │
+                           │ (via navigateur Streamlit) │
+                           └──────────────┬─────────────┘
+                                          │
+                                          ▼
+                           ┌────────────────────────────┐
+                           │     Application Streamlit  │
+                           └──────────────┬─────────────┘
+                                          │ requêtes HTTP
+                                          ▼
+                    ┌───────────────────────────────────────────────┐
+                    │        API FastAPI (Render, Docker)           │
+                    └──────────────┬────────────────────────────────┘
+                                   │ charge modèle + pipeline
+                                   ▼
+                         ┌──────────────────────────────┐
+                         │   Modèle ML (LightGBM)        │
+                         │   + FeatureBuilder            │
+                         │   + feature_names.json        │
+                         │   + threshold.json            │
+                         └──────────────────────────────┘
+```
 
 ---
 
+## 10. 🎯 Résumé
+
+- ✔ API cloud + Docker  
+- ✔ Streamlit complet  
+- ✔ SHAP local/global  
+- ✔ Monitoring drift  
+- ✔ Tests unitaires  
+- ✔ Pipeline ML industrialisé  
+
+🚀 **Projet totalement fonctionnel et déployé**
