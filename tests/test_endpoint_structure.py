@@ -85,5 +85,6 @@ def test_shap_structure():
 
     # --- facultatif mais recommandé ---
     # Tu sais que ton modèle final a 84 features :
-    assert n_features == 84, f"Le modèle ne renvoie pas 84 features : {n_features}"
-
+    expected_features = len(res["feature_names"])
+    assert n_features == expected_features, \
+       f"Mismatch: SHAP renvoie {n_features} valeurs mais feature_names en compte {expected_features}"

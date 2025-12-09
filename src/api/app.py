@@ -4,11 +4,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import joblib
 import pandas as pd
+import numpy as np
 import shap
 import traceback
 from src.utils.preprocessing import cleanup_inf_to_nan
-
-
 
 # =====================================================
 # CONFIGURATION DES CHEMINS
@@ -193,4 +192,49 @@ def shap_local(payload: ClientData):
             detail=f"Erreur SHAP : {str(e)}"
         )
 
+# =====================================================
+# ENDPOINT SHAP GLOBAL
+# =====================================================
 
+@app.get("/shap_global")
+def shap_global():
+    """
+    Renvoie les SHAP values globales (summary plot + top 15).
+    """
+    try:
+        # Récupération du modèle brut LGBM depuis le pipeline
+        lgbm = model.named_steps["model"]
+
+        # Chargement d'un échantillon du dataset d'entraînement
+        SAMPLE_PATH = BASE_DIR / "data" / "processed" / "df_test.csv"
+        df = pd.read_csv(SAMPLE_PATH)
+
+        # Retrait de la colonne TARGET si présente
+        df = df.drop(columns=["TARGET"], errors="ignore")
+
+        # Forcer les colonnes dans le même ordre que le modèle
+        df = df.reindex(columns=feature_names, fill_value=0)
+
+        # Échantillonner pour éviter une charge élevée
+        df_sample = df.sample(1000, random_state=42)
+
+        # Tout convertir en float (pour éviter pyarrow error)
+        df_sample = df_sample.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+
+        # SHAP global
+        explainer = shap.TreeExplainer(lgbm)
+        shap_vals = explainer.shap_values(df_sample)
+
+        # Si modèle binaire → garder la classe 1
+        if isinstance(shap_vals, list):
+            shap_vals = shap_vals[1]
+
+        return {
+            "feature_names": feature_names,
+            "shap_values": shap_vals.tolist(),
+            "data": df_sample.values.tolist()
+        }
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, f"Erreur SHAP global : {str(e)}")

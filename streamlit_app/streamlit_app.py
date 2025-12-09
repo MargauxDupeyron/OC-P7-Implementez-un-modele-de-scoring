@@ -23,60 +23,46 @@ sys.path.append(ROOT_DIR)
 
 load_dotenv()
 
-API_URL = os.getenv("API_URL")
-
-DATA_PATH = "data/processed/df_filtre.csv"
-
+API_URL = os.getenv("API_URL", "http://localhost:8000")
+DATA_PATH = "data/processed/df_test.csv"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
-MODEL_PATH = os.path.abspath(os.path.join(APP_DIR, "../models/final_lightgbm_model.joblib"))
+# =========================================================
+# 2. LOAD FEATURES
+# =========================================================
+
 FEATURES_PATH = os.path.abspath(os.path.join(APP_DIR, "../models/feature_names.json"))
-FEATUREBUILDER_PATH = os.path.abspath(os.path.join(APP_DIR, "../models/featurebuilder.pkl"))
-
-
-# =========================================================
-# 2. LOAD MODEL + FEATURES
-# =========================================================
-
-model = joblib.load(MODEL_PATH)
-feature_builder = joblib.load(FEATUREBUILDER_PATH)
-
 with open(FEATURES_PATH, "r") as f:
     FEATURE_NAMES = json.load(f)
-
-explainer = shap.TreeExplainer(model)
 
 
 # =========================================================
 # 3. UTILS
 # =========================================================
 
-def normalize_col(c):
-    return re.sub(r"[^A-Za-z0-9_]", "_", c.strip())
+def clean_for_api(d):
+    """Assure que toutes les valeurs sont JSON-compatibles."""
+    clean = {}
+    for k, v in d.items():
+        try:
+            val = float(v)
+            if not np.isfinite(val):
+                val = 0.0
+        except:
+            val = 0.0
+        clean[k] = val
+    return clean
 
 
 @st.cache_data
 def load_test_data(path):
     df = pd.read_csv(path)
-    df.columns = [normalize_col(c) for c in df.columns]
-    return df
-
-
-def clean_for_api(d):
-    """Transforme NaN → None pour API JSON."""
-    return {k: (None if (isinstance(v, float) and math.isnan(v)) else v) for k, v in d.items()}
-
-
-def prepare_features(df_row):
-    df = pd.DataFrame([df_row])
-    df2 = feature_builder.transform(df)
-    return df2.reindex(columns=FEATURE_NAMES)
+    return df.reindex(columns=FEATURE_NAMES, fill_value=0)
 
 
 def load_image_base64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
-
 
 # =========================================================
 # 4. STREAMLIT UI SETUP
@@ -167,7 +153,7 @@ st.session_state.idx = idx
 # Sélection du client
 sample = df_test.iloc[idx]
 
-st.write(f"### 🔍 Client sélectionné : **#{idx}**")
+st.write(f"### Client sélectionné : **#{idx}**")
 st.dataframe(sample.to_frame("valeur"), use_container_width=True)
 
 
@@ -226,13 +212,16 @@ if st.button("🚀 Lancer la prédiction"):
 
         # L'API renvoie directement la liste des 84 valeurs
         shap_values = np.array(shap_api["shap_values"])
-
-
         expected_value = shap_api["expected_value"]
         feature_values = shap_api["features"]
         feature_names = shap_api["feature_names"]
 
-        df_explain = pd.DataFrame([feature_values], columns=feature_names)
+        explanation = shap.Explanation(
+            values=shap_values,
+            base_values=expected_value,
+            data=np.array(feature_values),
+            feature_names=feature_names
+        )
 
         # =========================================================
         # TABS : Profil Client | SHAP Local | SHAP Global
@@ -279,21 +268,10 @@ if st.button("🚀 Lancer la prédiction"):
             st.markdown("### SHAP – Importance locale du client")
 
             # SHAP values déjà reçus depuis l'API
-            shap_values_np = np.array(shap_values).reshape(-1)
-
-            explanation = shap.Explanation(
-                values=shap_values_np,
-                base_values=expected_value,
-                data=df_explain.values[0],
-                feature_names=feature_names
-            )
-
-            fig = plt.figure(figsize=(6, 4))
-            shap.plots.waterfall(explanation, max_display=15, show=False)  # ⭐ compact & professionnel
+            fig = plt.figure(figsize=(8, 6))
+            shap.plots.waterfall(explanation, max_display=15, show=False)
             st.pyplot(fig)
             plt.close(fig)
-
-
 
         # ================================
         # 🌍 ONGLET SHAP GLOBAL
@@ -305,18 +283,23 @@ if st.button("🚀 Lancer la prédiction"):
             # -----------------------------
             # 1. Préparation des données
             # -----------------------------
-            X_sample = df_test.sample(1000, random_state=42)
-            X_sample_fb = feature_builder.transform(X_sample)
-            X_sample_fb = X_sample_fb.reindex(columns=FEATURE_NAMES)
+            shap_global_api = requests.get(f"{API_URL}/shap_global").json()
 
-            shap_global = explainer.shap_values(X_sample_fb)
-            if isinstance(shap_global, list):  # modèle binaire
-                shap_global = shap_global[1]
+            if "feature_names" not in shap_global_api:
+                st.error("Erreur API : 'feature_names' absent dans la réponse SHAP global. Récupération impossible.")
+                st.write("Réponse brute :", shap_global_api)
+                st.stop()
+            
+            feature_names = shap_global_api["feature_names"]
+            shap_global = np.array(shap_global_api["shap_values"], dtype=float)
+            X_global = np.array(shap_global_api["data"], dtype=float)
 
+            # Importance moyenne absolue
             mean_abs = np.abs(shap_global).mean(axis=0)
+
             df_import = (
                 pd.DataFrame({
-                    "feature": FEATURE_NAMES,
+                    "feature": feature_names,
                     "importance": mean_abs
                 })
                 .sort_values("importance", ascending=False)
@@ -328,19 +311,17 @@ if st.button("🚀 Lancer la prédiction"):
             # -----------------------------
             col1, col2 = st.columns(2)
 
-            # 🟦 Colonne 1 : Summary Plot
+            # 🟦 Summary Plot SHAP Global
             with col1:
                 st.markdown("### Summary Plot")
-
                 fig1 = plt.figure(figsize=(5, 4))
-                shap.summary_plot(shap_global, X_sample_fb, max_display=15, show=False)
+                shap.summary_plot(shap_global, X_global, feature_names=feature_names, max_display=15, show=False)
                 st.pyplot(fig1)
                 plt.close(fig1)
 
-            # 🟥 Colonne 2 : Barplot Top 15
+            # 🟥 Barplot TOP 15
             with col2:
                 st.markdown("### Top 15 variables")
-
                 fig2, ax = plt.subplots(figsize=(5, 4))
                 ax.barh(df_import["feature"][::-1], df_import["importance"][::-1], color="#2980b9")
                 ax.set_title("Importance globale (Top 15)")
